@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         + f" user={environ['POSTGRES_PGUSER']}"
         + f" password={environ['POSTGRES_PGPASS']}"
     )
-    pg_pool = AsyncConnectionPool(conninfo=conninfo, min_size=1, max_size=20)
+    pg_pool = AsyncConnectionPool(conninfo=conninfo, min_size=1, max_size=20, open=False)
     await pg_pool.open()
 
     app.state.s3_session = aioboto3.Session()
