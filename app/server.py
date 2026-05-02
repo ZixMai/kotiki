@@ -16,6 +16,11 @@ app.include_router(kotiki.router, prefix="/v1/files", tags=["files"])
 @app.get("/index", response_class=HTMLResponse, tags=["pages"])
 async def index(request: Request):
     root_path = request.scope.get("root_path") or ""
+    base_host = request.url.hostname or ""
+    port = request.url.port
+    scheme = "http" if base_host in {"localhost", "127.0.0.1"} else "https"
+    port_suffix = f":{port}" if port and port not in {80, 443} else ""
+    api_base = f"{scheme}://{base_host}{port_suffix}{root_path}"
     initial_keys: list[str] = []
     badges = ["purrfect", "floofy", "silly", "tiny lions", "mlem"]
     template = Template("""<!doctype html>
@@ -135,9 +140,9 @@ async def index(request: Request):
   </script>
 </body>
 </html>""")
-    config = {"apiBase": root_path, "limit": 10}
+    config = {"apiBase": api_base, "limit": 10}
     html = template.render(
-        api_base=root_path,
+        api_base=api_base,
         config_json=json.dumps(config),
         page_title="Infinite Kotiki Parade",
         page_subtitle="Scroll down for more purr-fect surprises.",
