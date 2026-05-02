@@ -1,0 +1,120 @@
+name: kotiki-server
+
+services:
+  kotiki-postgres:
+    container_name: kotiki-postgres
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_PGUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_PGPASS}
+      POSTGRES_DB: ${POSTGRES_PGDB}
+      PGDATA: "/var/lib/postgresql/18/docker"
+      PGUSER: ${POSTGRES_PGUSER}
+      PGDATABASE: ${POSTGRES_PGDB}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_PGUSER} -d ${POSTGRES_PGDB}" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./sql:/docker-entrypoint-initdb.d
+    networks:
+      - shared-network
+
+#  xray:
+#    image: teddysun/xray:26.2.6
+#    container_name: xray
+#    restart: unless-stopped
+#    volumes:
+#      - ./config.json:/etc/xray/config.json:ro
+#    networks:
+#      - shared-network
+#    ports:
+#      - "8000:8000"
+
+  kotiki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["dev"]
+    container_name: kotiki
+    env_file:
+      - .env
+    environment:
+      PYTHON_ENV: DOCKER
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - shared-network
+
+  caddy:
+    image: caddy:2.11-alpine
+    container_name: caddy
+    restart: unless-stopped
+    profiles: ["prod"]
+    environment:
+      DOMAIN: ${CADDY_DOMAIN}
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:2019/config/ >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - shared-network
+
+  kotiki-s3:
+    image: chrislusf/seaweedfs:4.17
+    container_name: kotiki-s3
+    restart: unless-stopped
+    ports:
+      - "8333:8333"    # S3 API
+      - "8888:8888"    # Filer UI
+      - "9333:9333"    # Master UI
+      - "23646:23646"  # Admin UI
+      - "7333:7333"    # WebDAV
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        : "$${SEAWEED_ADMIN_USER:?SEAWEED_ADMIN_USER is required}"
+        : "$${SEAWEED_ADMIN_PASSWORD:?SEAWEED_ADMIN_PASSWORD is required}"
+        exec weed mini \
+          -dir=/data \
+          -s3.config=/etc/seaweedfs/s3.json \
+          -admin.user="$$SEAWEED_ADMIN_USER" \
+          -admin.password="$$SEAWEED_ADMIN_PASSWORD"
+    environment:
+      SEAWEED_ADMIN_USER: ${SEAWEED_ADMIN_USER:-admin}
+      SEAWEED_ADMIN_PASSWORD: ${SEAWEED_ADMIN_PASSWORD:-adminsecret}
+    volumes:
+      - seaweedfs-data:/data
+      - ./s3-config.json:/etc/seaweedfs/s3.json:ro
+    networks:
+      - shared-network
+
+volumes:
+  caddy_data:
+  caddy_config:
+  seaweedfs-data:
+  postgres-data:
+
+networks:
+  shared-network:
+    driver: bridge
