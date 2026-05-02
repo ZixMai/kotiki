@@ -1,10 +1,11 @@
 from io import BytesIO
+from os import environ
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.core.dependencies import get_kotiki_service
-from app.models.kotiki import KotikiCreateUploadResult, KotikiItem, KotikiList
+from app.models.kotiki import KotikiCreateUploadResult, KotikiList
 from app.services.kotiki_service import KotikiService
 
 router = APIRouter()
@@ -23,9 +24,12 @@ async def list_kotiki(
 @router.post("/kotiki", response_model=KotikiCreateUploadResult, status_code=201)
 async def create_kotik(
     name: str = Form(...),
+    token: str = Form(...),
     file: UploadFile = File(...),
     service: KotikiService = Depends(get_kotiki_service),
 ):
+    if token != environ["UPLOAD_TOKEN"]:
+        raise HTTPException(status_code=403, detail="Invalid token")
     data = await file.read()
     item = await service.create_kotik_with_upload(name, data, file.content_type)
     return {"id": item["id"], "name": item["name"], "key": item["id"]}
