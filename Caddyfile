@@ -1,9 +1,5 @@
 {$DOMAIN} {
-    @root path /
-    redir @root /index
-
-    @index path /index
-    reverse_proxy @index kotiki:8080 {
+    reverse_proxy kotiki:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
     }
